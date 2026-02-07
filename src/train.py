@@ -1,15 +1,16 @@
 """
-This module contains functions to preprocess and train the model
-for bank consumer churn prediction.
+This module contains functions to preprocess and train multiple models
+for bank consumer churn prediction with MLflow tracking.
 """
 
+import os
+import joblib
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
 from sklearn.compose import make_column_transformer
-from sklearn.preprocessing import OneHotEncoder,  StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -19,7 +20,9 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
 )
 
-### Import MLflow
+import mlflow
+
+from model_config import get_model, get_model_params, list_available_models
 
 def rebalance(data):
     """
@@ -102,74 +105,134 @@ def preprocess(df):
 
     X_train = col_transf.fit_transform(X_train)
     X_train = pd.DataFrame(X_train, columns=col_transf.get_feature_names_out())
+    import joblib
+
+    # mlflow.sklearn.log_model(col_transf, "preprocessor")
 
     X_test = col_transf.transform(X_test)
     X_test = pd.DataFrame(X_test, columns=col_transf.get_feature_names_out())
-
+    joblib.dump(col_transf, "preprocessor.pkl")  # Save the preprocessor to a file
+    mlflow.log_artifact("preprocessor.pkl")  # Log the preprocessor as an artifact
     # Log the transformer as an artifact
+    # mlflow.sklearn.log_model(col_transf, "preprocessor")
 
     return col_transf, X_train, X_test, y_train, y_test
 
 
-def train(X_train, y_train):
+def train(X_train, y_train, model_name: str):
     """
-    Train a logistic regression model.
+    Train a model specified by name.
 
     Args:
         X_train (pd.DataFrame): DataFrame with features
         y_train (pd.Series): Series with target
+        model_name (str): Name of the model to train
 
     Returns:
-        LogisticRegression: trained logistic regression model
+        trained model instance
     """
-    log_reg = LogisticRegression(max_iter=1000)
-    log_reg.fit(X_train, y_train)
+    model = get_model(model_name)
+    model_params = get_model_params(model_name)
+    
+    model.fit(X_train, y_train)
 
-    ### Log the model with the input and output schema
-    # Infer signature (input and output schema)
+    # Log the model with the input and output schema
+    signature = mlflow.models.infer_signature(X_train, model.predict(X_train))
+    mlflow.sklearn.log_model(model, "model", signature=signature)
 
-    # Log model
+    # Log model parameters
+    for param_name, param_value in model_params.items():
+        mlflow.log_param(param_name, param_value)
 
-    ### Log the data
+    # Log data info
+    mlflow.log_param("num_rows", X_train.shape[0])
+    mlflow.log_param("num_features", X_train.shape[1])
 
-    return log_reg
+    return model
 
 
 def main():
     ### Set the tracking URI for MLflow
+    mlflow.set_tracking_uri("http://localhost:5000")
 
     ### Set the experiment name
+    mlflow.set_experiment("churn_prediction")
 
+    # Load data once
+    df = pd.read_csv("/media/ahmed-fayad/data/MLops/MLOps-Course-Labs/src/Churn_Modelling.xls")
 
-    ### Start a new run and leave all the main function code as part of the experiment
+    # Get all available models
+    models_to_train = list_available_models()
+    print(f"Training {len(models_to_train)} models: {models_to_train}")
 
-    df = pd.read_csv("data/Churn_Modelling.csv")
-    col_transf, X_train, X_test, y_train, y_test = preprocess(df)
+    results = []
 
-    ### Log the max_iter parameter
+    for model_name in models_to_train:
+        print(f"\n{'='*50}")
+        print(f"Training: {model_name}")
+        print('='*50)
 
-    model = train(X_train, y_train)
+        ### Start a new run for each model
+        with mlflow.start_run(run_name=model_name):
+            col_transf, X_train, X_test, y_train, y_test = preprocess(df)
 
+            model = train(X_train, y_train, model_name)
+
+            y_pred = model.predict(X_test)
+
+            # Calculate metrics
+            acc = accuracy_score(y_test, y_pred)
+            prec = precision_score(y_test, y_pred)
+            rec = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
+
+            ### Log metrics
+            mlflow.log_metric("accuracy", acc)
+            mlflow.log_metric("precision", prec)
+            mlflow.log_metric("recall", rec)
+            mlflow.log_metric("f1_score", f1)
+
+            ### Log tag
+            mlflow.set_tag("model_type", model_name)
+
+            # Log confusion matrix
+            conf_mat = confusion_matrix(y_test, y_pred, labels=model.classes_)
+            conf_mat_disp = ConfusionMatrixDisplay(
+                confusion_matrix=conf_mat, display_labels=model.classes_
+            )
+            conf_mat_disp.plot()
+            
+            plt.title(f"Confusion Matrix - {model_name}")
+            mlflow.log_figure(plt.gcf(), "confusion_matrix.png")
+            plt.close()
+
+            # Store results
+            results.append({
+                "model": model_name,
+                "accuracy": acc,
+                "precision": prec,
+                "recall": rec,
+                "f1_score": f1,
+            })
+
+            print(f"  Accuracy:  {acc:.4f}")
+            print(f"  Precision: {prec:.4f}")
+            print(f"  Recall:    {rec:.4f}")
+            print(f"  F1 Score:  {f1:.4f}")
+
+    # Print summary
+    print(f"\n{'='*60}")
+    print("RESULTS SUMMARY")
+    print('='*60)
+    results_df = pd.DataFrame(results)
+    results_df = results_df.sort_values("f1_score", ascending=False)
+    print(results_df.to_string(index=False))
     
-    y_pred = model.predict(X_test)
+    best_model = results_df.iloc[0]
+    print(f"\nBest Model: {best_model['model']} (F1: {best_model['f1_score']:.4f})")
 
-    ### Log metrics after calculating them
-
-
-    ### Log tag
-
-
-    
-    conf_mat = confusion_matrix(y_test, y_pred, labels=model.classes_)
-    conf_mat_disp = ConfusionMatrixDisplay(
-        confusion_matrix=conf_mat, display_labels=model.classes_
-    )
-    conf_mat_disp.plot()
-    
-    # Log the image as an artifact in MLflow
-    
-    plt.show()
 
 
 if __name__ == "__main__":
+    
     main()
