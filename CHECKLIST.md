@@ -15,9 +15,11 @@
 
 ## Model Utils (`app/model_utils.py`)
 
-- [ ] TODO 1: Load your model at module level
-- [ ] TODO 2: Implement `predict_churn()`
-- [ ] TODO 3: Fill in sample features
+- [ ] TODO 1: Load your model (and preprocessor) at module level
+- [ ] TODO 2: Implement `preprocess()`
+- [ ] TODO 3: Call `preprocess()` inside `predict_churn()`
+- [ ] TODO 4: Implement `predict_churn()` using the model
+- [ ] TODO 5: Fill in sample features
 - [ ] Verify: `uv run python -m app.model_utils`
 
 ## API (`main.py`)
