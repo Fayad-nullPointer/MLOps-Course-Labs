@@ -6,10 +6,13 @@ Run with:
     pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
 """
 
+from pydantic import ValidationError
+from main import ChurnRequest
 import pytest
 from litestar.testing import TestClient
 from app.model_utils import predict_churn
 from main import app
+
 
 # ---------------------------------------------------------------------------
 # Function Tests
@@ -26,10 +29,6 @@ def test_predict_churn_edge_cases():
     sample_zeros = [0, 0, 0, 0.0, 0, 0, 0, 0.0, 0, 0, 0]
     result = predict_churn(sample_zeros)
     assert result in (0, 1)
-
-
-from pydantic import ValidationError
-from main import ChurnRequest
 
 
 def test_logical_constraints_edge_cases():
