@@ -21,14 +21,14 @@ logger = setup_logging()
 # ---------------------------------------------------------------------------
 # Age > 18 
 class ChurnRequest(BaseModel):
-    credit_score: int
-    age: int
-    tenure: int
-    balance: float
-    num_of_products: int
-    has_cr_card: int
-    is_active_member: int
-    estimated_salary: float
+    credit_score: int = Field(ge=0)
+    age: int = Field(gt=18)
+    tenure: int = Field(ge=0)
+    balance: float = Field(ge=0.0)
+    num_of_products: int = Field(ge=1)
+    has_cr_card: Literal[0, 1] 
+    is_active_member: Literal[0, 1]
+    estimated_salary: float = Field(ge=0.0)
     geography: Literal["Germany", "Spain", "France"]
     gender: Literal["Male", "Female"]
     

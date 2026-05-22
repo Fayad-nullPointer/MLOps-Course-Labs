@@ -22,10 +22,33 @@ def test_predict_churn_direct():
     assert result in (0, 1)
 
 def test_predict_churn_edge_cases():
-    # TODO 2 (bonus): Write another function test with edge-case inputs
     sample_zeros = [0, 0, 0, 0.0, 0, 0, 0, 0.0, 0, 0, 0]
     result = predict_churn(sample_zeros)
     assert result in (0, 1)
+from pydantic import ValidationError
+from main import ChurnRequest
+
+def test_logical_constraints_edge_cases():
+    """Test that invalid logical inputs are caught by Pydantic validation."""
+    
+    # We expect this code block to raise a ValidationError
+    with pytest.raises(ValidationError) as exc_info:
+        # Create a request with logically impossible or constrained values
+        ChurnRequest(
+            credit_score=0,
+            age=0,                # Fails because age must be > 18
+            tenure=-1,            # Logically impossible
+            balance=-500.0,       # Bank balance shouldn't be negative in this context
+            num_of_products=0, 
+            has_cr_card=5,        # Should be strictly 0 or 1
+            is_active_member=3,   # Should be strictly 0 or 1
+            estimated_salary=-10, # Logically impossible
+            geography="Italy",    # Fails because only France, Spain, Germany are allowed
+            gender="Alien"        # Fails because only Male, Female are allowed
+        )
+    
+    # Assert that the error specifically caught the age constraint
+    assert "age" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------

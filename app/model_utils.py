@@ -5,8 +5,16 @@ The model must be loaded ONCE at module level, NOT inside the predict function.
 """
 import joblib
 # TODO 1: Load your serialized churn model from data/model.joblib
-model = joblib.load("/media/ahmed-fayad/3b40def2-87b7-41ce-8913-2981f887941c/home/ITI Cont.../MLOPs/MLOps-Course-Labs/data/model.pkl")
-# preprocessor = joblib.load("data/preprocessor.pkl")
+from pathlib import Path
+
+# Build the correct path dynamically based on where this file is located
+# __file__ is app/model_utils.py
+# .parent is app/
+# .parent.parent is MLOps-Course-Labs/
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "data" / "model.pkl"
+
+model = joblib.load(MODEL_PATH)# preprocessor = joblib.load("data/preprocessor.pkl")
 
 def predict_churn(features: list[float]) -> int:
     """
