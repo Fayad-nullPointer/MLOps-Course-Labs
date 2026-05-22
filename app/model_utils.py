@@ -3,7 +3,9 @@ Model loading and prediction logic.
 
 The model must be loaded ONCE at module level, NOT inside the predict function.
 """
+
 import joblib
+
 # TODO 1: Load your serialized churn model from data/model.joblib
 from pathlib import Path
 
@@ -14,7 +16,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / "data" / "model.pkl"
 
-model = joblib.load(MODEL_PATH)# preprocessor = joblib.load("data/preprocessor.pkl")
+model = joblib.load(MODEL_PATH)  # preprocessor = joblib.load("data/preprocessor.pkl")
+
 
 def predict_churn(features: list[float]) -> int:
     """
@@ -26,13 +29,13 @@ def predict_churn(features: list[float]) -> int:
 
 if __name__ == "__main__":
     # TODO 3: Replace with sample features that match your model
-#     Feature Names Expected by the Model:
-# ['standardscaler__CreditScore' 'standardscaler__Age'
-#  'standardscaler__Tenure' 'standardscaler__Balance'
-#  'standardscaler__NumOfProducts' 'standardscaler__HasCrCard'
-#  'standardscaler__IsActiveMember' 'standardscaler__EstimatedSalary'
-#  'onehotencoder__Geography_Germany' 'onehotencoder__Geography_Spain'
-#  'onehotencoder__Gender_Male']
+    #     Feature Names Expected by the Model:
+    # ['standardscaler__CreditScore' 'standardscaler__Age'
+    #  'standardscaler__Tenure' 'standardscaler__Balance'
+    #  'standardscaler__NumOfProducts' 'standardscaler__HasCrCard'
+    #  'standardscaler__IsActiveMember' 'standardscaler__EstimatedSalary'
+    #  'onehotencoder__Geography_Germany' 'onehotencoder__Geography_Spain'
+    #  'onehotencoder__Gender_Male']
 
     sample = [22, 1000, 3, 50000, 2, 1, 1, 50000, 0, 0, 1]
     print(f"Input:      {sample}")
