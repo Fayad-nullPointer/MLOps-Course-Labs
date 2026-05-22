@@ -1,0 +1,71 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  lint:
+    name: Lint & Validation (Pre-commit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          
+      - name: Ensure Python (fallback)
+        if: hashFiles('.python-version') == ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run pre-commit hooks
+        # This will run all pre-commit hooks (like black, flake8, isort, etc.) on all files
+        run: uv run pre-commit run --all-files
+
+  test:
+    name: Run Tests
+    # The test job waits for the lint job to pass before running
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Ensure Python (fallback)
+        if: hashFiles('.python-version') == ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Pytest with Coverage
+        # Using the exact command from your CHECKLIST
+        run: |
+          uv run pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
