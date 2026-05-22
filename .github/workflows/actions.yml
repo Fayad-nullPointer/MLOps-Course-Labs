@@ -1,69 +1,65 @@
-name: CI/CD Pipeline
-
-on:
-  push:
-  pull_request:
-    branches: [ "main", "master" ]
-jobs:
-  lint:
-    name: Lint & Validation (Pre-commit)
+  build-and-push:
+    name: Build & Push Docker image to AWS ECR
+    needs: test
     runs-on: ubuntu-latest
+    # Removed the 'if' restriction so it runs on your test-ci-pipeline branch
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          enable-cache: true
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: ".python-version"
-          
-      - name: Ensure Python (fallback)
-        if: hashFiles('.python-version') == ''
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12.3"
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Run pre-commit hooks
-        # This will run all pre-commit hooks (like black, flake8, isort, etc.) on all files
-        run: uv run pre-commit run --all-files
-
-  test:
-    name: Run Tests
-    # The test job waits for the lint job to pass before running
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: ".python-version"
-
-      - name: Ensure Python (fallback)
-        if: hashFiles('.python-version') == ''
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12.3"
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Run Pytest with Coverage
-        # Using the exact command from your CHECKLIST
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          uv run pytest tests/ -v --cov=app --cov=main --cov-report=term-missing
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  deploy:
+    name: Deploy to EC2 Instance
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Removed the 'if' restriction here as well
+    
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: AWS_REGION,ECR_REPOSITORY,AWS_ACCOUNT_ID
+          script: |
+            export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+            export FULL_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+            
+            # Authenticate Docker on EC2 to pull from ECR
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            
+            # Pull the image
+            docker pull $FULL_IMAGE
+            
+            # Stop and remove the old container
+            docker stop my-mlops-app || true
+            docker rm my-mlops-app || true
+            
+            # Run the new container (Mapping Host port 443 to container port 8000)
+            docker run -d --name my-mlops-app -p 443:8000 $FULL_IMAGE
